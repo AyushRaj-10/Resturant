@@ -1,9 +1,15 @@
-"""Agent discovery router providing read-only inspection of available tools."""
+"""Agent router providing read-only tool discovery and multi-agent chat endpoints."""
 
 from typing import Any, Dict, List
-from fastapi import APIRouter
+import uuid
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy.orm import Session
+from app.agents.orchestrator import handle_message
 from app.agents.tools.registry import clean_schema_for_llm, list_tools
+from app.database import get_db
+from app.routers.rate_limiter import check_ai_rate_limit
+from app.schemas.agent import AgentChatRequest, AgentChatResponse
 
 router = APIRouter(prefix="/agent", tags=["Agent"])
 
@@ -44,3 +50,27 @@ def get_agent_tools() -> List[ToolDiscoveryOut]:
             )
         )
     return results
+
+
+@router.post(
+    "/chat",
+    response_model=AgentChatResponse,
+    dependencies=[Depends(check_ai_rate_limit)],
+    summary="Chat with the restaurant assistant",
+    description="Send a message to the restaurant assistant. Routes to order or billing specialists using function-calling tools.",
+)
+def agent_chat(
+    payload: AgentChatRequest,
+    db: Session = Depends(get_db),
+) -> AgentChatResponse:
+    """Process a user conversational turn through the multi-agent system."""
+    session_id = payload.session_id.strip() if payload.session_id and payload.session_id.strip() else str(uuid.uuid4())
+    result = handle_message(db=db, session_id=session_id, message=payload.message)
+    return AgentChatResponse(
+        session_id=session_id,
+        reply=result.reply,
+        agent=result.agent,
+        trace=result.trace,
+        source=result.source,
+        stopped_reason=result.stopped_reason,
+    )
