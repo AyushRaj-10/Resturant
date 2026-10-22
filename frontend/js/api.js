@@ -136,3 +136,38 @@ export async function getMenuItemDescription(itemId) {
 export async function draftOrderFromText(text) {
   return request('POST', '/ai/draft-order', { text });
 }
+
+export async function getAiStatus() {
+  return request('GET', '/ai/status');
+}
+
+// Multi-Agent & Guardrail Endpoints (Step 11 & Step 12)
+export async function agentChat(message, sessionId = null) {
+  const payload = { message };
+  if (sessionId) {
+    payload.session_id = sessionId;
+  }
+  return request('POST', '/agent/chat', payload);
+}
+
+export async function agentConfirm(confirmationId, sessionId, approve) {
+  return request('POST', '/agent/confirm', {
+    confirmation_id: confirmationId,
+    session_id: sessionId,
+    approve: Boolean(approve),
+  });
+}
+
+export async function agentPending(sessionId) {
+  return request('GET', `/agent/pending?session_id=${encodeURIComponent(sessionId)}`);
+}
+
+export async function getAuditLog({ decision = null, agent_name = null, tool_name = null, skip = 0, limit = 50 } = {}) {
+  const params = new URLSearchParams();
+  if (decision) params.append('decision', decision);
+  if (agent_name) params.append('agent_name', agent_name);
+  if (tool_name) params.append('tool_name', tool_name);
+  params.append('skip', skip.toString());
+  params.append('limit', limit.toString());
+  return request('GET', `/agent/audit-log?${params.toString()}`);
+}
