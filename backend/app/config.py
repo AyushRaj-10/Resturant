@@ -29,6 +29,12 @@ class Settings(BaseSettings):
     LLM_TEMPERATURE: float = 0.3
     LLM_MAX_RETRIES: int = 1
 
+    # Multi-Agent Configuration
+    AGENT_MAX_STEPS: int = 5
+    AGENT_MAX_TOOL_CALLS: int = 6
+    AGENT_TIMEOUT_SECONDS: float = 30.0
+    AGENT_MAX_HISTORY_TURNS: int = 6
+
     model_config = SettingsConfigDict(
         env_file=(BASE_DIR / ".env", ".env"),
         env_file_encoding="utf-8",

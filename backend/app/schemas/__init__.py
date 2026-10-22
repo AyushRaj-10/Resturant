@@ -1,5 +1,6 @@
 """Pydantic schemas package exporting all request, response, and filter models."""
 
+from app.schemas.agent import AgentChatRequest, AgentChatResponse
 from app.schemas.ai import (
     DraftOrderRequest,
     DraftOrderResponse,
@@ -55,4 +56,7 @@ __all__ = [
     "UpsellResponse",
     "DraftOrderRequest",
     "DraftOrderResponse",
+    # Agent
+    "AgentChatRequest",
+    "AgentChatResponse",
 ]
