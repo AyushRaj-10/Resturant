@@ -68,6 +68,9 @@ TestingSessionLocal = sessionmaker(
 app_db.SessionLocal = TestingSessionLocal
 app_db.engine = test_engine
 
+import app.agents.guard.audit as audit_module
+audit_module.SessionLocal = TestingSessionLocal
+
 
 # =========================================================================
 # Safety Fixtures: Network & Database Isolation
@@ -287,7 +290,8 @@ def settings_override():
                 original_values[k] = getattr(settings, k)
             setattr(settings, k, v)
         from app.llm.client import get_llm_client
-        get_llm_client.cache_clear()
+        if hasattr(get_llm_client, "cache_clear"):
+            get_llm_client.cache_clear()
         return settings
 
     yield _override
@@ -295,7 +299,8 @@ def settings_override():
     for k, v in original_values.items():
         setattr(settings, k, v)
     from app.llm.client import get_llm_client
-    get_llm_client.cache_clear()
+    if hasattr(get_llm_client, "cache_clear"):
+        get_llm_client.cache_clear()
 
 
 # =========================================================================
