@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Restaurant Order Management System Dashboard">
+  <title>Restaurant Order Management System</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="app-container">
+    <header class="app-header">
+      <div class="brand">
+        <div class="brand-badge">Step 1</div>
+        <h1>Restaurant Order Management</h1>
+      </div>
+      <p class="subtitle">System Architecture & Service Health Monitor</p>
+    </header>
+
+    <main class="main-card">
+      <div class="card-header">
+        <span class="card-title">Backend API Health</span>
+        <button id="refresh-btn" class="btn-refresh" type="button">Refresh</button>
+      </div>
+
+      <div id="status" class="status-box">
+        <div class="loading-state">
+          <span class="spinner"></span>
+          <span>Connecting to backend service...</span>
+        </div>
+      </div>
+
+      <div class="info-grid">
+        <div class="info-card">
+          <span class="info-label">API Endpoint</span>
+          <code id="api-url">http://localhost:8000/health</code>
+        </div>
+        <div class="info-card">
+          <span class="info-label">Database Check</span>
+          <code id="db-api-url">http://localhost:8000/health/db</code>
+        </div>
+      </div>
+    </main>
+
+    <footer class="app-footer">
+      <p>Restaurant OMS &bull; FastAPI + MySQL + AI Multi-Agent Architecture</p>
+    </footer>
+  </div>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
