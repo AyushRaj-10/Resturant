@@ -1,5 +1,5 @@
 """Routers package for API route definitions."""
 
-from app.routers import menu, orders
+from app.routers import ai, menu, orders
 
-__all__ = ["menu", "orders"]
+__all__ = ["ai", "menu", "orders"]
