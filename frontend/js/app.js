@@ -13,12 +13,21 @@ import {
   showConfirmDialog,
   showToast,
 } from './ui.js';
+import { initChat } from './chat.js';
+import { initAuditViewer } from './audit.js';
 
 // DOM Selectors
 const elements = {
   lookupForm: document.getElementById('lookup-form'),
   lookupId: document.getElementById('lookup-id'),
   btnRefreshAll: document.getElementById('btn-refresh-all'),
+
+  // Navigation Tabs & Views
+  tabOrders: document.getElementById('tab-orders'),
+  tabAudit: document.getElementById('tab-audit'),
+  viewOrders: document.getElementById('view-orders'),
+  viewAudit: document.getElementById('view-audit'),
+  auditViewerContainer: document.getElementById('audit-viewer-container'),
 
   // New Order Form
   orderForm: document.getElementById('order-form'),
@@ -83,6 +92,13 @@ const elements = {
 async function init() {
   bindEventListeners();
 
+  // Initialize Assistant Chat Panel
+  initChat({
+    openOrderDetail,
+    fetchOrders,
+    refreshCurrentOrderDetail,
+  });
+
   try {
     // 1. Fetch Menu Items
     const menuItems = await api.getMenu(true);
@@ -99,6 +115,34 @@ async function init() {
 }
 
 function bindEventListeners() {
+  // Navigation Tab Switching (Orders Dashboard vs Agent Audit Log)
+  if (elements.tabOrders && elements.tabAudit) {
+    elements.tabOrders.addEventListener('click', () => {
+      elements.tabOrders.classList.add('active');
+      elements.tabOrders.setAttribute('aria-selected', 'true');
+      elements.tabAudit.classList.remove('active');
+      elements.tabAudit.setAttribute('aria-selected', 'false');
+
+      if (elements.viewOrders) elements.viewOrders.classList.remove('hidden');
+      if (elements.viewAudit) elements.viewAudit.classList.add('hidden');
+    });
+
+    elements.tabAudit.addEventListener('click', () => {
+      elements.tabAudit.classList.add('active');
+      elements.tabAudit.setAttribute('aria-selected', 'true');
+      elements.tabOrders.classList.remove('active');
+      elements.tabOrders.setAttribute('aria-selected', 'false');
+
+      if (elements.viewAudit) elements.viewAudit.classList.remove('hidden');
+      if (elements.viewOrders) elements.viewOrders.classList.add('hidden');
+
+      // Mount or refresh audit viewer
+      if (elements.auditViewerContainer) {
+        initAuditViewer(elements.auditViewerContainer);
+      }
+    });
+  }
+
   // Quick Search by Order ID
   elements.lookupForm.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -380,7 +424,7 @@ async function handleCreateOrder(e) {
 // Orders Table & List Logic
 // ==========================================
 
-async function fetchOrders() {
+export async function fetchOrders() {
   try {
     elements.ordersCountLabel.textContent = 'Fetching orders...';
     const orders = await api.listOrders(state.filters);
@@ -500,6 +544,16 @@ function closeDetailModal() {
     elements.aiInsightsBody.innerHTML = '';
   }
   setCurrentOrder(null, []);
+}
+
+export async function refreshCurrentOrderDetail() {
+  if (state.currentOrder && state.currentOrder.id) {
+    try {
+      await openOrderDetail(state.currentOrder.id);
+    } catch (e) {
+      console.warn('Failed to refresh open order details:', e);
+    }
+  }
 }
 
 function renderModalContent() {

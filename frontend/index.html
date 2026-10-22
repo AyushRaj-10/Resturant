@@ -22,6 +22,16 @@
         </div>
       </div>
 
+      <!-- Navigation Tabs -->
+      <nav class="nav-tabs" role="tablist" aria-label="Dashboard Sections">
+        <button type="button" id="tab-orders" class="nav-tab active" role="tab" aria-selected="true" aria-controls="view-orders">
+          📋 Orders
+        </button>
+        <button type="button" id="tab-audit" class="nav-tab" role="tab" aria-selected="false" aria-controls="view-audit">
+          🛡️ Audit Log
+        </button>
+      </nav>
+
       <div class="navbar-actions">
         <!-- Quick Lookup by ID -->
         <form id="lookup-form" class="lookup-form" role="search">
@@ -45,9 +55,11 @@
 
     <!-- Main Content Area -->
     <main class="content-container">
-      <div class="dashboard-grid">
-        <!-- Left Column: New Order Form -->
-        <section class="card new-order-card" aria-labelledby="new-order-title">
+      <!-- Orders Dashboard View -->
+      <div id="view-orders" class="tab-view active">
+        <div class="dashboard-grid">
+          <!-- Left Column: New Order Form -->
+          <section class="card new-order-card" aria-labelledby="new-order-title">
           <div class="card-header">
             <h2 id="new-order-title">Create New Order</h2>
             <span class="badge badge-accent">Step 8 Generative AI</span>
@@ -209,6 +221,14 @@
           </div>
         </section>
       </div>
+      <!-- End Orders Dashboard View -->
+
+      <!-- Agent Audit Log View -->
+      <div id="view-audit" class="tab-view hidden">
+        <div id="audit-viewer-container" class="audit-viewer-container">
+          <!-- Dynamically populated by audit.js -->
+        </div>
+      </div>
     </main>
 
     <!-- Order Detail Modal -->
@@ -351,6 +371,103 @@
 
     <!-- Toast Notifications Container -->
     <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+    <!-- Floating Assistant Trigger Button -->
+    <button
+      type="button"
+      id="btn-open-assistant"
+      class="btn-floating-assistant"
+      aria-label="Open AI Restaurant Assistant"
+      aria-haspopup="dialog"
+      aria-expanded="false"
+      aria-controls="assistant-panel"
+    >
+      <span class="assistant-btn-icon">💬</span>
+      <span class="assistant-btn-text">Assistant</span>
+    </button>
+
+    <!-- Docked Assistant Chat Panel -->
+    <aside
+      id="assistant-panel"
+      class="assistant-panel hidden"
+      role="dialog"
+      aria-label="Restaurant Assistant Chat"
+      aria-hidden="true"
+    >
+      <div class="assistant-panel-header">
+        <div class="assistant-header-title-row">
+          <span class="assistant-avatar">🤖</span>
+          <div>
+            <h2 class="assistant-title">Restaurant Assistant</h2>
+            <div class="assistant-status-row">
+              <span id="chat-ai-mode-badge" class="badge">Checking AI...</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="assistant-header-actions">
+          <button
+            type="button"
+            id="btn-new-chat"
+            class="btn btn-outline btn-xs"
+            title="Start new conversation"
+          >
+            + New Chat
+          </button>
+          <button
+            type="button"
+            id="btn-close-assistant"
+            class="assistant-close-btn"
+            aria-label="Close Assistant Panel"
+          >
+            ×
+          </button>
+        </div>
+      </div>
+
+      <!-- Offline Notice (if unavailable) -->
+      <div id="chat-ai-unavailable-notice" class="chat-offline-banner hidden">
+        <span>ℹ AI is in fallback mode. You can still message or use the <a href="#order-form">order form</a>.</span>
+      </div>
+
+      <!-- Message History Container -->
+      <div
+        id="chat-messages-list"
+        class="chat-messages-container"
+        role="log"
+        aria-live="polite"
+        aria-relevant="additions text"
+      >
+        <!-- Injected dynamically by chat.js -->
+      </div>
+
+      <!-- Chat Input Area -->
+      <div class="assistant-input-area">
+        <form id="chat-input-form" class="chat-input-form">
+          <div class="chat-textarea-wrapper">
+            <textarea
+              id="chat-input-textarea"
+              class="chat-textarea"
+              rows="2"
+              maxlength="500"
+              placeholder="Ask about menu, order food, or manage bills... (Enter to send)"
+              aria-label="Message to restaurant assistant"
+            ></textarea>
+            <div class="chat-input-footer">
+              <span id="chat-char-counter" class="chat-counter">0 / 500</span>
+              <button
+                type="submit"
+                id="btn-send-message"
+                class="btn btn-primary btn-sm btn-chat-send"
+                aria-label="Send message"
+              >
+                Send ➔
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </aside>
   </div>
 
   <script type="module" src="js/app.js"></script>
