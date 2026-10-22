@@ -1,5 +1,12 @@
 """Pydantic schemas package exporting all request, response, and filter models."""
 
+from app.schemas.ai import (
+    DraftOrderRequest,
+    DraftOrderResponse,
+    TextResponse,
+    UpsellItem,
+    UpsellResponse,
+)
 from app.schemas.audit import AgentAuditLogOut
 from app.schemas.common import (
     ErrorResponse,
@@ -42,4 +49,10 @@ __all__ = [
     "AllowedActionsResponse",
     # Audit
     "AgentAuditLogOut",
+    # AI Features
+    "TextResponse",
+    "UpsellItem",
+    "UpsellResponse",
+    "DraftOrderRequest",
+    "DraftOrderResponse",
 ]

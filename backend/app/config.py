@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     APP_ENV: str = "development"
 
     # LLM Configuration (Optional)
-    LLM_PROVIDER: Literal["none", "anthropic", "openai"] = "none"
+    LLM_PROVIDER: Literal["none", "groq"] = "none"
     LLM_API_KEY: str = ""
     LLM_MODEL: Optional[str] = ""
     LLM_TIMEOUT_SECONDS: int = 15

@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from app.config import Settings, get_settings
 from app.llm.base import LLMProvider, LLMResult, sanitize_llm_text
 from app.llm.prompts import BASE_SYSTEM_RULES
-from app.llm.providers import AnthropicProvider, OpenAIProvider
+from app.llm.providers import GroqProvider
 
 logger = logging.getLogger(__name__)
 
@@ -54,14 +54,8 @@ class LLMClient:
             return
 
         try:
-            if self.provider_name == "openai":
-                self._provider = OpenAIProvider(
-                    api_key=self.api_key,
-                    model=self.model,  # type: ignore[arg-type]
-                    timeout_seconds=self.timeout_seconds,
-                )
-            elif self.provider_name == "anthropic":
-                self._provider = AnthropicProvider(
+            if self.provider_name == "groq":
+                self._provider = GroqProvider(
                     api_key=self.api_key,
                     model=self.model,  # type: ignore[arg-type]
                     timeout_seconds=self.timeout_seconds,
@@ -80,7 +74,7 @@ class LLMClient:
             return False
         if not self.model or not self.model.strip():
             return False
-        return self.provider_name in ("openai", "anthropic")
+        return self.provider_name == "groq"
 
     def generate_text(
         self,
