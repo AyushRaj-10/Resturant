@@ -35,6 +35,16 @@ class Settings(BaseSettings):
     AGENT_TIMEOUT_SECONDS: float = 30.0
     AGENT_MAX_HISTORY_TURNS: int = 6
 
+    # Guardrail and Confirmation Policy Settings (Step 11)
+    AGENT_WRITES_ENABLED: bool = True
+    AGENT_DESTRUCTIVE_ENABLED: bool = True
+    AGENT_CONFIRM_TTL_SECONDS: int = 120
+    AGENT_MAX_DESTRUCTIVE_PER_REQUEST: int = 1
+    AGENT_MAX_WRITES_PER_REQUEST: int = 3
+    AGENT_MAX_TOOL_CALLS_PER_MINUTE_PER_SESSION: int = 20
+    AGENT_MAX_DISCOUNT_PERCENT: float = 20.0
+    AGENT_MAX_ORDER_TOTAL: float = 20000.0
+
     model_config = SettingsConfigDict(
         env_file=(BASE_DIR / ".env", ".env"),
         env_file_encoding="utf-8",

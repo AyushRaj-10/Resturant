@@ -41,6 +41,19 @@ StoppedReason = Literal[
 ]
 
 
+from datetime import datetime
+
+
+class PendingConfirmationInfo(BaseModel):
+    """Details of an action awaiting human approval."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    confirmation_id: str = Field(..., description="Unique unguessable confirmation token")
+    summary: str = Field(..., description="Human-readable description of proposed action")
+    expires_at: Any = Field(..., description="ISO timestamp when action confirmation expires")
+
+
 class AgentRunResult(BaseModel):
     """Comprehensive return container for an agent or orchestrator run."""
 
@@ -53,3 +66,7 @@ class AgentRunResult(BaseModel):
     steps_used: int = Field(default=0, description="Number of LLM round-trips performed")
     tool_calls_used: int = Field(default=0, description="Total number of tool calls executed")
     stopped_reason: StoppedReason = Field(..., description="Reason the agent loop concluded")
+    pending_confirmation: Optional[PendingConfirmationInfo] = Field(
+        default=None,
+        description="Pending action metadata if confirmation is required",
+    )
