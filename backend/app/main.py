@@ -6,7 +6,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.database import get_db
-from app.routers import ai, menu, orders
+from app.routers import agent, ai, menu, orders
 from app.services.exceptions import (
     ConflictError,
     NotFoundError,
@@ -70,6 +70,7 @@ async def unhandled_exception_handler(_: Request, exc: Exception):
 
 
 # Register Routers
+app.include_router(agent.router)
 app.include_router(ai.router)
 app.include_router(menu.router)
 app.include_router(orders.router)
