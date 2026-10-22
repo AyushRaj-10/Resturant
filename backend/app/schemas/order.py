@@ -160,6 +160,16 @@ class OrderOut(BaseModel):
     table_no: int = Field(..., description="Dining table number")
     status: OrderStatus = Field(..., description="Current lifecycle status of the order")
     total_bill: Decimal = Field(..., description="Calculated total bill amount in INR")
+    discount_percent: Optional[Decimal] = Field(
+        default=None,
+        description="Discount percentage applied to the order",
+        examples=[Decimal("10.00")],
+    )
+    service_charge_percent: Optional[Decimal] = Field(
+        default=None,
+        description="Service charge percentage applied to the order",
+        examples=[Decimal("5.00")],
+    )
     items: List[OrderItemOut] = Field(
         default_factory=list,
         validation_alias=AliasChoices("items", "order_items"),
@@ -286,3 +296,11 @@ class StatusUpdate(BaseModel):
         description="New lifecycle status for the order",
         examples=[OrderStatus.PREPARING],
     )
+
+
+class AllowedActionsResponse(BaseModel):
+    """Response payload detailing permitted operations for an order."""
+
+    status: OrderStatus = Field(..., description="Current status of the order")
+    allowed: List[str] = Field(..., description="List of permitted operational actions")
+
