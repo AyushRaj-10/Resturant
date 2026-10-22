@@ -154,23 +154,212 @@ def _run_call(ctx: ToolContext, tool: ToolSpec, args: BaseModel) -> ToolResult:
         )
 
 
-def execute_tool(ctx: ToolContext, name: str, raw_args: Dict[str, Any]) -> ToolResult:
-    """Execute an agent tool with strict arguments, safe isolation, and zero exceptions raised."""
+from app.models.enums import AuditDecision
+from app.models.order import Order
+from sqlalchemy.orm import Session
+
+
+
+def _build_order_snapshot_and_summary(
+    db: Session,
+    tool_name: str,
+    args: Dict[str, Any],
+) -> Tuple[Dict[str, Any], str]:
+    order_id = args.get("order_id")
+    order = db.get(Order, order_id) if order_id is not None else None
+    if order is not None:
+        snapshot = {
+            "order_id": order.id,
+            "customer_name": order.customer_name,
+            "table_no": order.table_no,
+            "status": order.status.value,
+            "total_bill": str(order.total_bill),
+            "updated_at": order.updated_at.isoformat() if order.updated_at else None,
+        }
+        action_verb = "Cancel" if "cancel" in tool_name else ("Delete" if "delete" in tool_name else tool_name.replace("_", " ").title())
+        summary = f"{action_verb} Order #{order.id} for {order.customer_name} (Status: {order.status.value}, Total: ₹{order.total_bill})"
+    else:
+        snapshot = {"order_id": order_id}
+        action_verb = tool_name.replace("_", " ").title()
+        summary = f"{action_verb} Order #{order_id}"
+    return snapshot, summary
+
+
+def execute_tool(
+    ctx: ToolContext,
+    name: str,
+    raw_args: Dict[str, Any],
+    guard_ctx: Optional[Any] = None,
+) -> ToolResult:
+    """Execute an agent tool with strict arguments, deterministic guard evaluation, and fail-closed audit logging."""
+    from app.agents.guard.audit import log_decision
+    from app.agents.guard.confirmations import confirmations_store
+    from app.agents.guard.guard import evaluate_call
+    from app.agents.guard.models import GuardContext
+
     # -------------------------------------------------------------------------
     # Stage 1: Preparation (lookup + strict argument validation)
     # -------------------------------------------------------------------------
     tool, validated_args, prep_error = _prepare_call(name, raw_args)
     if prep_error is not None:
+        risk = tool.risk if tool else RiskLevel.READ
+        agent_name = guard_ctx.agent_name if guard_ctx else ctx.agent_name
+        req_id = guard_ctx.request_id if guard_ctx else ctx.request_id
+        sess_id = guard_ctx.session_id if guard_ctx else ctx.session_id
+        try:
+            log_decision(
+                agent_name=agent_name,
+                tool_name=name,
+                arguments=raw_args,
+                decision=AuditDecision.BLOCKED,
+                reason=f"[{prep_error.error.type.upper()}] {prep_error.error.message}",
+                result=None,
+                session_id=sess_id,
+                request_id=req_id,
+                risk=risk,
+            )
+        except Exception:
+            pass
         return prep_error
 
     # =========================================================================
-    # [STEP 11 HOOK POINT: GUARD APPROVAL & AUDIT LOGGING WILL GO HERE]
-    # In Step 11, the guard layer will evaluate (ctx, tool, validated_args)
-    # to enforce pre-call permission checks, human confirmations, and audit logs
-    # before proceeding to handler execution.
+    # Stage 1.5: Guard Evaluation (Deterministic Policy Checks)
     # =========================================================================
+    if guard_ctx is None:
+        guard_ctx = GuardContext(
+            agent_name=ctx.agent_name,
+            allowed_tools=frozenset(TOOLS.keys()),
+            session_id=ctx.session_id or "default",
+            request_id=ctx.request_id,
+            user_messages=list(ctx.user_messages),
+        )
+
+    guard_decision = evaluate_call(tool, raw_args, guard_ctx, ctx.db)
+
+    # 1. Blocked by policy
+    if guard_decision.outcome == "block":
+        try:
+            log_decision(
+                agent_name=guard_ctx.agent_name,
+                tool_name=tool.name,
+                arguments=raw_args,
+                decision=AuditDecision.BLOCKED,
+                reason=f"[{guard_decision.code}] {guard_decision.reason}",
+                result=None,
+                session_id=guard_ctx.session_id,
+                request_id=guard_ctx.request_id,
+                risk=tool.risk,
+            )
+        except Exception:
+            if tool.risk in {RiskLevel.WRITE, RiskLevel.DESTRUCTIVE}:
+                return ToolResult(
+                    ok=False,
+                    error=ToolError(type="blocked", message="Operation blocked: audit logging failed (fail-closed policy)."),
+                )
+        return ToolResult(
+            ok=False,
+            error=ToolError(type="blocked", message=guard_decision.reason),
+        )
+
+    # 2. Needs Human Confirmation
+    if guard_decision.outcome == "needs_confirmation":
+        snapshot, summary = _build_order_snapshot_and_summary(ctx.db, tool.name, raw_args)
+        pending_act = confirmations_store.create_pending_action(
+            session_id=guard_ctx.session_id,
+            agent_name=guard_ctx.agent_name,
+            tool_name=tool.name,
+            arguments=raw_args,
+            summary=summary,
+            snapshot=snapshot,
+        )
+        guard_ctx.destructive_used += 1
+
+        try:
+            log_decision(
+                agent_name=guard_ctx.agent_name,
+                tool_name=tool.name,
+                arguments=raw_args,
+                decision=AuditDecision.PENDING_CONFIRMATION,
+                reason=f"[{guard_decision.code}] {guard_decision.reason}",
+                result={"confirmation_id": pending_act.confirmation_id, "summary": summary},
+                session_id=guard_ctx.session_id,
+                request_id=guard_ctx.request_id,
+                risk=tool.risk,
+            )
+        except Exception:
+            confirmations_store.update_status(pending_act.confirmation_id, "rejected")
+            return ToolResult(
+                ok=False,
+                error=ToolError(type="blocked", message="Operation blocked: audit logging failed (fail-closed policy)."),
+            )
+
+        return ToolResult(
+            ok=False,
+            error=ToolError(
+                type="pending_confirmation",
+                message="This action needs the user's confirmation. It has NOT been executed.",
+            ),
+            confirmation_id=pending_act.confirmation_id,
+        )
+
+    # 3. Allowed
+    if tool.risk == RiskLevel.WRITE:
+        guard_ctx.writes_used += 1
+
+    # Pre-execution fail-closed audit check for state-modifying actions
+    if tool.risk in {RiskLevel.WRITE, RiskLevel.DESTRUCTIVE}:
+        try:
+            log_decision(
+                agent_name=guard_ctx.agent_name,
+                tool_name=tool.name,
+                arguments=raw_args,
+                decision=AuditDecision.ALLOWED,
+                reason=f"[{guard_decision.code}] {guard_decision.reason}",
+                result={"status": "executing"},
+                session_id=guard_ctx.session_id,
+                request_id=guard_ctx.request_id,
+                risk=tool.risk,
+            )
+        except Exception:
+            return ToolResult(
+                ok=False,
+                error=ToolError(
+                    type="blocked",
+                    message="Operation blocked: audit logging failed (fail-closed policy).",
+                ),
+            )
 
     # -------------------------------------------------------------------------
     # Stage 2: Execution (handler dispatch + domain error mapping)
     # -------------------------------------------------------------------------
-    return _run_call(ctx, tool, validated_args)
+    result = _run_call(ctx, tool, validated_args)
+
+    audit_reason = f"[{guard_decision.code}] {guard_decision.reason}"
+    if not result.ok:
+        audit_reason += f" | Handler failed: {result.error.message if result.error else 'unknown'}"
+
+    try:
+        log_decision(
+            agent_name=guard_ctx.agent_name,
+            tool_name=tool.name,
+            arguments=raw_args,
+            decision=AuditDecision.ALLOWED,
+            reason=audit_reason,
+            result=result.data if result.ok else {"error": result.error.model_dump() if result.error else None},
+            session_id=guard_ctx.session_id,
+            request_id=guard_ctx.request_id,
+            risk=tool.risk,
+        )
+    except Exception:
+        # Fail-closed: rollback if audit logging fails for WRITE/DESTRUCTIVE
+        if tool.risk in {RiskLevel.WRITE, RiskLevel.DESTRUCTIVE}:
+            ctx.db.rollback()
+            return ToolResult(
+                ok=False,
+                error=ToolError(
+                    type="blocked",
+                    message="Operation blocked: audit logging failed (fail-closed policy).",
+                ),
+            )
+
+    return result

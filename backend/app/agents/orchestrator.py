@@ -63,11 +63,20 @@ def handle_message(
     else:
         spec = ORDER_AGENT_SPEC
 
-    # 4. Construct tool context
+    # 4. Construct tool context with real human messages for provenance verification
+    user_messages = [
+        turn["content"]
+        for turn in history
+        if turn.get("role") == "user" and turn.get("content")
+    ]
+    user_messages.append(message)
+
     ctx = ToolContext(
         db=db,
         agent_name=spec.name,
         request_id=str(uuid.uuid4()),
+        session_id=session_id,
+        user_messages=user_messages,
     )
 
     # 5. Execute specialist agent loop

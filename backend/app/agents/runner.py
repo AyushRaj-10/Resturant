@@ -4,8 +4,10 @@ import json
 import logging
 import time
 from typing import Any, Dict, List, Optional
-from app.agents.base import AgentRunResult, AgentSpec, StoppedReason, TraceStep
+from app.agents.base import AgentRunResult, AgentSpec, PendingConfirmationInfo, StoppedReason, TraceStep
 from app.agents.groq_tools_client import ChatCompletionResult, GroqToolsClient, get_groq_tools_client
+from app.agents.guard.confirmations import confirmations_store
+from app.agents.guard.models import GuardContext
 from app.agents.tools.base import ToolContext, ToolError, ToolResult
 from app.agents.tools.registry import execute_tool, to_llm_tool_specs
 from app.config import get_settings
@@ -83,6 +85,16 @@ def run_agent(
     steps_used = 0
     stopped_reason: StoppedReason = "completed"
     final_reply: Optional[str] = None
+
+    # Setup per-request guard context for rate limits, caps, and provenance
+    guard_ctx = GuardContext(
+        agent_name=spec.name,
+        allowed_tools=frozenset(spec.allowed_tools),
+        session_id=ctx.session_id or "default",
+        request_id=ctx.request_id,
+        user_messages=list(ctx.user_messages),
+    )
+    pending_confirmation: Optional[PendingConfirmationInfo] = None
 
     for step in range(1, max_steps + 1):
         steps_used = step
@@ -180,29 +192,6 @@ def run_agent(
                 })
                 continue
 
-            # Enforce agent tool allowlist
-            if tc.name not in spec.allowed_tools:
-                logger.warning("Agent '%s' attempted unauthorized tool: '%s'", spec.name, tc.name)
-                trace.append(TraceStep(
-                    agent=spec.name,
-                    kind="blocked",
-                    tool=tc.name,
-                    arguments=parsed_args,
-                    ok=False,
-                    summary=f"Tool '{tc.name}' is blocked by allowlist for {spec.name}",
-                ))
-                blocked_res = ToolResult(
-                    ok=False,
-                    error=ToolError(type="validation", message=f"Tool '{tc.name}' is not permitted for this agent."),
-                )
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tc.id,
-                    "name": tc.name,
-                    "content": f"<tool_data>\n{blocked_res.model_dump_json()}\n</tool_data>",
-                })
-                continue
-
             trace.append(TraceStep(
                 agent=spec.name,
                 kind="tool_call",
@@ -211,23 +200,52 @@ def run_agent(
                 summary=f"Invoked tool '{tc.name}'",
             ))
 
-            # =========================================================================
-            # [STEP 11 HOOK POINT: GUARD APPROVAL & AUDIT CHECK WILL GO HERE]
-            # In Step 11, the guard layer will evaluate the tool call, check human
-            # confirmation requirements for destructive tools, log audit decisions,
-            # and block unapproved actions before execute_tool is reached.
-            # =========================================================================
+            # Execute tool through deterministic guardrail layer
+            tool_result = execute_tool(ctx, tc.name, parsed_args, guard_ctx=guard_ctx)
 
-            tool_result = execute_tool(ctx, tc.name, parsed_args)
-
-            trace.append(TraceStep(
-                agent=spec.name,
-                kind="tool_result",
-                tool=tc.name,
-                arguments=parsed_args,
-                ok=tool_result.ok,
-                summary=f"Tool '{tc.name}' executed with ok={tool_result.ok}",
-            ))
+            if tool_result.error and tool_result.error.type == "blocked":
+                trace.append(TraceStep(
+                    agent=spec.name,
+                    kind="blocked",
+                    tool=tc.name,
+                    arguments=parsed_args,
+                    ok=False,
+                    summary=tool_result.error.message,
+                ))
+            elif tool_result.error and tool_result.error.type == "pending_confirmation":
+                act = confirmations_store.get_action(tool_result.confirmation_id) if tool_result.confirmation_id else None
+                if act:
+                    pending_confirmation = PendingConfirmationInfo(
+                        confirmation_id=act.confirmation_id,
+                        summary=act.summary,
+                        expires_at=act.expires_at.isoformat() if hasattr(act.expires_at, "isoformat") else str(act.expires_at),
+                    )
+                trace.append(TraceStep(
+                    agent=spec.name,
+                    kind="tool_result",
+                    tool=tc.name,
+                    arguments=parsed_args,
+                    ok=False,
+                    summary=f"Awaiting confirmation: {act.summary if act else 'Requires user confirmation'}",
+                ))
+            elif tool_result.ok:
+                trace.append(TraceStep(
+                    agent=spec.name,
+                    kind="tool_result",
+                    tool=tc.name,
+                    arguments=parsed_args,
+                    ok=True,
+                    summary=f"Tool '{tc.name}' executed successfully",
+                ))
+            else:
+                trace.append(TraceStep(
+                    agent=spec.name,
+                    kind="tool_result",
+                    tool=tc.name,
+                    arguments=parsed_args,
+                    ok=False,
+                    summary=f"Tool '{tc.name}' error: {tool_result.error.message if tool_result.error else 'failed'}",
+                ))
 
             # Wrap in untrusted <tool_data> delimiters and truncate if excessive
             result_payload = tool_result.model_dump_json()
@@ -269,4 +287,6 @@ def run_agent(
         steps_used=steps_used,
         tool_calls_used=total_tool_calls,
         stopped_reason=stopped_reason,
+        pending_confirmation=pending_confirmation,
     )
+

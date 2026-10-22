@@ -21,12 +21,14 @@ class RiskLevel(str, Enum):
 class ToolContext:
     """Execution context passed to every tool invocation.
 
-    In Step 11, agent_name and request_id will be used for audit logging.
+    In Step 11, agent_name, request_id, session_id, and user_messages are used for guardrails and audit logging.
     """
 
     db: Session
     agent_name: str
     request_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    session_id: Optional[str] = None
+    user_messages: List[str] = field(default_factory=list)
 
 
 ToolErrorType = Literal[
@@ -36,6 +38,8 @@ ToolErrorType = Literal[
     "invalid_arguments",
     "unknown_tool",
     "internal",
+    "blocked",
+    "pending_confirmation",
 ]
 
 
@@ -56,6 +60,7 @@ class ToolResult(BaseModel):
     ok: bool
     data: Optional[Union[dict, list]] = None
     error: Optional[ToolError] = None
+    confirmation_id: Optional[str] = None
 
 
 @dataclass

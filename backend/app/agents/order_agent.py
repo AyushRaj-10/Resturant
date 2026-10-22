@@ -10,6 +10,8 @@ ORDER_AGENT_ALLOWED_TOOLS = frozenset({
     "get_allowed_actions",
     "create_order",
     "update_quantity",
+    "cancel_order",
+    "delete_order",
 })
 
 ORDER_AGENT_SPEC = AgentSpec(
