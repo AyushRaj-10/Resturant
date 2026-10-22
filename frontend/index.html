@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Restaurant Order Management System Dashboard">
+  <meta name="description" content="Restaurant Order Management System - Operations Dashboard">
   <title>Restaurant Order Management System</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -11,45 +11,300 @@
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-  <div class="app-container">
-    <header class="app-header">
-      <div class="brand">
-        <div class="brand-badge">Step 1</div>
-        <h1>Restaurant Order Management</h1>
+  <div id="app" class="app-layout">
+    <!-- Top Navigation Header -->
+    <header class="navbar">
+      <div class="navbar-brand">
+        <span class="brand-icon">🍽️</span>
+        <div>
+          <h1>Restaurant Order Management</h1>
+          <p class="navbar-sub">FastAPI + MySQL Operations Portal</p>
+        </div>
       </div>
-      <p class="subtitle">System Architecture & Service Health Monitor</p>
+
+      <div class="navbar-actions">
+        <!-- Quick Lookup by ID -->
+        <form id="lookup-form" class="lookup-form" role="search">
+          <label for="lookup-id" class="sr-only">Search Order ID</label>
+          <input
+            type="number"
+            id="lookup-id"
+            class="input-lookup"
+            placeholder="Search Order #..."
+            min="1"
+            required
+          >
+          <button type="submit" class="btn btn-secondary btn-sm">Find</button>
+        </form>
+
+        <button id="btn-refresh-all" class="btn btn-outline btn-sm" type="button" title="Refresh data">
+          ⟳ Refresh
+        </button>
+      </div>
     </header>
 
-    <main class="main-card">
-      <div class="card-header">
-        <span class="card-title">Backend API Health</span>
-        <button id="refresh-btn" class="btn-refresh" type="button">Refresh</button>
-      </div>
+    <!-- Main Content Area -->
+    <main class="content-container">
+      <div class="dashboard-grid">
+        <!-- Left Column: New Order Form -->
+        <section class="card new-order-card" aria-labelledby="new-order-title">
+          <div class="card-header">
+            <h2 id="new-order-title">Create New Order</h2>
+            <span class="badge badge-accent">Step 6 Frontend</span>
+          </div>
 
-      <div id="status" class="status-box">
-        <div class="loading-state">
-          <span class="spinner"></span>
-          <span>Connecting to backend service...</span>
-        </div>
-      </div>
+          <form id="order-form" class="order-form" novalidate>
+            <div class="form-row-2">
+              <div class="form-group">
+                <label for="customer-name">Customer Name <span class="required">*</span></label>
+                <input
+                  type="text"
+                  id="customer-name"
+                  class="form-control"
+                  placeholder="e.g. Rohan Gupta"
+                  maxlength="100"
+                  required
+                >
+              </div>
 
-      <div class="info-grid">
-        <div class="info-card">
-          <span class="info-label">API Endpoint</span>
-          <code id="api-url">http://localhost:8000/health</code>
-        </div>
-        <div class="info-card">
-          <span class="info-label">Database Check</span>
-          <code id="db-api-url">http://localhost:8000/health/db</code>
-        </div>
+              <div class="form-group">
+                <label for="table-no">Table No (1-200) <span class="required">*</span></label>
+                <input
+                  type="number"
+                  id="table-no"
+                  class="form-control"
+                  placeholder="e.g. 5"
+                  min="1"
+                  max="200"
+                  required
+                >
+              </div>
+            </div>
+
+            <!-- Line Items Builder -->
+            <div class="line-items-section">
+              <div class="section-label-row">
+                <label>Order Items <span class="required">*</span></label>
+                <button type="button" id="btn-add-item" class="btn-text">
+                  + Add Item
+                </button>
+              </div>
+
+              <div id="order-items-list" class="order-items-list">
+                <!-- Dynamically populated rows will appear here -->
+              </div>
+            </div>
+
+            <!-- Order Total Preview & Submit -->
+            <div class="order-summary-box">
+              <div class="summary-line">
+                <span>Estimated Total:</span>
+                <strong id="form-total-preview" class="total-amount">₹0.00</strong>
+              </div>
+              <button type="submit" id="btn-submit-order" class="btn btn-primary btn-block">
+                Place Order
+              </button>
+            </div>
+          </form>
+        </section>
+
+        <!-- Right Column: Orders Management Table -->
+        <section class="card orders-card" aria-labelledby="orders-list-title">
+          <div class="card-header orders-header">
+            <div>
+              <h2 id="orders-list-title">Live Orders</h2>
+              <p class="card-sub" id="orders-count-label">Loading orders...</p>
+            </div>
+
+            <!-- Filters Bar -->
+            <div class="filters-bar">
+              <div class="filter-item">
+                <label for="filter-status" class="sr-only">Status Filter</label>
+                <select id="filter-status" class="form-select">
+                  <option value="">All Statuses</option>
+                  <option value="PLACED">PLACED</option>
+                  <option value="PREPARING">PREPARING</option>
+                  <option value="SERVED">SERVED</option>
+                  <option value="PAID">PAID</option>
+                  <option value="CANCELLED">CANCELLED</option>
+                </select>
+              </div>
+
+              <div class="filter-item">
+                <label for="filter-table" class="sr-only">Table Filter</label>
+                <input
+                  type="number"
+                  id="filter-table"
+                  class="form-control input-table-filter"
+                  placeholder="Table #"
+                  min="1"
+                  max="200"
+                >
+              </div>
+            </div>
+          </div>
+
+          <!-- Orders Table Container -->
+          <div class="table-responsive">
+            <table class="data-table" id="orders-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Customer</th>
+                  <th>Table</th>
+                  <th>Status</th>
+                  <th>Items</th>
+                  <th>Total</th>
+                  <th>Created</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="orders-tbody">
+                <!-- Rows injected dynamically -->
+              </tbody>
+            </table>
+
+            <!-- Empty State -->
+            <div id="orders-empty-state" class="empty-state hidden">
+              <span class="empty-icon">📋</span>
+              <p class="empty-title">No orders found</p>
+              <p class="empty-sub">Create your first order using the form on the left.</p>
+            </div>
+          </div>
+
+          <!-- Pagination Bar -->
+          <div class="pagination-bar">
+            <span id="pagination-info" class="pagination-info">Showing orders</span>
+            <div class="pagination-buttons">
+              <button id="btn-page-prev" class="btn btn-outline btn-sm" type="button" disabled>
+                ← Prev
+              </button>
+              <span id="page-indicator" class="page-indicator">Page 1</span>
+              <button id="btn-page-next" class="btn btn-outline btn-sm" type="button" disabled>
+                Next →
+              </button>
+            </div>
+          </div>
+        </section>
       </div>
     </main>
 
-    <footer class="app-footer">
-      <p>Restaurant OMS &bull; FastAPI + MySQL + AI Multi-Agent Architecture</p>
-    </footer>
+    <!-- Order Detail Modal -->
+    <div id="detail-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-header">
+          <div>
+            <div class="modal-title-row">
+              <h2 id="modal-title">Order Details</h2>
+              <span id="modal-status-badge"></span>
+            </div>
+            <p id="modal-subtitle" class="modal-sub"></p>
+          </div>
+          <button id="btn-close-modal" class="modal-close" type="button" aria-label="Close dialog">×</button>
+        </div>
+
+        <div class="modal-body">
+          <!-- Line Items Section -->
+          <div class="detail-section">
+            <h3>Ordered Items</h3>
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Item</th>
+                    <th>Qty</th>
+                    <th>Unit Price</th>
+                    <th>Line Total</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="modal-items-tbody">
+                  <!-- Items injected dynamically -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Bill Adjustments and Totals -->
+          <div class="bill-summary-grid">
+            <div class="bill-adjust-box">
+              <h3>Bill Adjustments</h3>
+              <form id="bill-adjust-form" class="bill-adjust-form">
+                <div class="form-row-2">
+                  <div class="form-group">
+                    <label for="adjust-discount">Discount %</label>
+                    <input
+                      type="number"
+                      id="adjust-discount"
+                      class="form-control"
+                      placeholder="0.00"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                    >
+                  </div>
+                  <div class="form-group">
+                    <label for="adjust-service">Service %</label>
+                    <input
+                      type="number"
+                      id="adjust-service"
+                      class="form-control"
+                      placeholder="0.00"
+                      min="0"
+                      max="30"
+                      step="0.01"
+                    >
+                  </div>
+                </div>
+                <button
+                  type="submit"
+                  id="btn-apply-bill"
+                  class="btn btn-secondary btn-sm"
+                >
+                  Apply Adjustments
+                </button>
+              </form>
+            </div>
+
+            <div class="bill-totals-box">
+              <div class="totals-row">
+                <span>Items Subtotal:</span>
+                <span id="modal-subtotal-val">₹0.00</span>
+              </div>
+              <div class="totals-row" id="row-discount" style="display: none;">
+                <span id="modal-discount-label">Discount:</span>
+                <span id="modal-discount-val" class="text-success">-₹0.00</span>
+              </div>
+              <div class="totals-row" id="row-service" style="display: none;">
+                <span id="modal-service-label">Service Charge:</span>
+                <span id="modal-service-val">+₹0.00</span>
+              </div>
+              <div class="totals-row totals-grand">
+                <span>Total Bill:</span>
+                <strong id="modal-grand-total">₹0.00</strong>
+              </div>
+            </div>
+          </div>
+
+          <!-- Lifecycle Actions Bar -->
+          <div class="lifecycle-actions-section">
+            <h3>Order Status & Actions</h3>
+            <div id="modal-actions-container" class="action-buttons-group">
+              <!-- Dynamically rendered state progression, cancel, and delete buttons -->
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" id="btn-modal-done" class="btn btn-secondary">Done</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast Notifications Container -->
+    <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="true"></div>
   </div>
 
-  <script src="js/app.js"></script>
+  <script type="module" src="js/app.js"></script>
 </body>
 </html>
