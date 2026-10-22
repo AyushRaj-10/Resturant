@@ -14,19 +14,29 @@ restaurant-oms/
 │   │   ├── main.py              # FastAPI app, CORS, health endpoints
 │   │   ├── config.py            # Pydantic BaseSettings configuration
 │   │   ├── database.py          # SQLAlchemy engine, session maker, get_db
-│   │   ├── models/__init__.py   # ORM models (reserved for future steps)
+│   │   ├── models/
+│   │   │   ├── __init__.py      # Exports all models and domain enums
+│   │   │   ├── enums.py         # OrderStatus & AuditDecision enums
+│   │   │   ├── menu_item.py     # MenuItem model
+│   │   │   ├── order.py         # Order and OrderItem models
+│   │   │   └── audit.py         # AgentAuditLog model
 │   │   ├── schemas/__init__.py  # Pydantic schemas (reserved for future steps)
 │   │   ├── routers/__init__.py  # API route definitions
 │   │   ├── services/__init__.py # Core business logic layer
 │   │   ├── agents/__init__.py   # Multi-agent workflows & guarded tools
 │   │   └── llm/__init__.py      # LLM integrations
+│   ├── scripts/
+│   │   ├── init_db.py           # Table creation and --reset script
+│   │   └── seed_menu.py         # Idempotent menu seed script
 │   └── requirements.txt         # Pinned backend dependencies
 ├── frontend/
 │   ├── index.html               # Frontend dashboard
 │   ├── css/style.css            # Stylesheet
 │   └── js/app.js                # Health check client logic
 ├── tests/
-│   └── test_health.py           # Pytest test suite for health endpoints
+│   ├── conftest.py              # Test database engine and session fixtures
+│   ├── test_health.py           # Pytest test suite for health endpoints
+│   └── test_models.py           # Pytest test suite for models and constraints
 ├── .env.example                 # Example environment variables
 ├── .gitignore                   # Ignored files (venv, cache, .env)
 ├── pytest.ini                   # Pytest path and runner configuration
@@ -91,6 +101,35 @@ Log in to your MySQL server and create the database:
 ```sql
 CREATE DATABASE IF NOT EXISTS restaurant_oms CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
+
+---
+
+## Database Management
+
+### 1. Initialize Database Tables
+Create all database tables (`menu_items`, `orders`, `order_items`, `agent_audit_log`):
+
+```bash
+python backend/scripts/init_db.py
+```
+*(This script is safe to run repeatedly; it will only create tables that do not already exist).*
+
+### 2. Reset Database Tables (`--reset`)
+To drop all existing tables and re-create fresh empty tables:
+
+```bash
+python backend/scripts/init_db.py --reset
+```
+> [!IMPORTANT]
+> The `--reset` command requires typing `yes` to confirm. It will automatically refuse to run if `APP_ENV=production`.
+
+### 3. Seed Menu Data
+Populate `menu_items` with realistic Indian restaurant offerings (starters, mains, breads, desserts, beverages) priced in INR:
+
+```bash
+python backend/scripts/seed_menu.py
+```
+*(This script is idempotent: it checks if `menu_items` has records and skips seeding if already populated).*
 
 ---
 
