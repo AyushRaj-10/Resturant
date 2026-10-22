@@ -111,3 +111,28 @@ export async function deleteOrder(orderId) {
 export async function getAllowedActions(orderId) {
   return request('GET', `/orders/${orderId}/allowed-actions`);
 }
+
+// AI Feature endpoints
+export async function getOrderConfirmation(orderId) {
+  return request('GET', `/ai/orders/${orderId}/confirmation`);
+}
+
+export async function getOrderSummary(orderId) {
+  return request('GET', `/ai/orders/${orderId}/summary`);
+}
+
+export async function getBillExplanation(orderId) {
+  return request('GET', `/ai/orders/${orderId}/bill-explanation`);
+}
+
+export async function getUpsellSuggestions(orderId) {
+  return request('GET', `/ai/orders/${orderId}/suggestions`);
+}
+
+export async function getMenuItemDescription(itemId) {
+  return request('GET', `/ai/menu/${itemId}/description`);
+}
+
+export async function draftOrderFromText(text) {
+  return request('POST', '/ai/draft-order', { text });
+}

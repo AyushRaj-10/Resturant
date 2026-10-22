@@ -50,7 +50,29 @@
         <section class="card new-order-card" aria-labelledby="new-order-title">
           <div class="card-header">
             <h2 id="new-order-title">Create New Order</h2>
-            <span class="badge badge-accent">Step 6 Frontend</span>
+            <span class="badge badge-accent">Step 8 Generative AI</span>
+          </div>
+
+          <!-- Natural Language AI Draft Box -->
+          <div class="ai-draft-box">
+            <div class="ai-draft-header">
+              <span class="ai-draft-title">✨ Describe Order in Natural Language</span>
+              <span class="badge badge-ai">Groq AI</span>
+            </div>
+            <p class="ai-draft-sub">Type or paste what the customer wants:</p>
+            <div class="ai-draft-input-group">
+              <textarea
+                id="ai-draft-text"
+                class="form-control"
+                rows="2"
+                maxlength="500"
+                placeholder="e.g. Table 4, Rahul wants 2 butter naan and one paneer tikka"
+              ></textarea>
+              <button type="button" id="btn-draft-order" class="btn btn-secondary btn-draft">
+                Generate Draft
+              </button>
+            </div>
+            <div id="ai-draft-feedback" class="ai-draft-feedback hidden"></div>
           </div>
 
           <form id="order-form" class="order-form" novalidate>
@@ -291,6 +313,32 @@
             <h3>Order Status & Actions</h3>
             <div id="modal-actions-container" class="action-buttons-group">
               <!-- Dynamically rendered state progression, cancel, and delete buttons -->
+            </div>
+          </div>
+
+          <!-- AI Assistant / Insights Section -->
+          <div class="ai-insights-section">
+            <div class="ai-insights-header">
+              <h3>AI Assistant & Insights</h3>
+              <div class="ai-insights-btn-group">
+                <button type="button" id="btn-ai-explain-bill" class="btn btn-outline btn-sm">
+                  💡 Explain Bill
+                </button>
+                <button type="button" id="btn-ai-summary" class="btn btn-outline btn-sm">
+                  📋 Summarize
+                </button>
+                <button type="button" id="btn-ai-suggestions" class="btn btn-outline btn-sm">
+                  ✨ Suggest Add-ons
+                </button>
+              </div>
+            </div>
+
+            <div id="ai-insights-panel" class="ai-insights-panel hidden">
+              <div class="ai-insights-meta">
+                <span id="ai-insights-title" class="font-semibold">AI Output</span>
+                <span id="ai-insights-badge" class="badge"></span>
+              </div>
+              <div id="ai-insights-body" class="ai-insights-body"></div>
             </div>
           </div>
         </div>

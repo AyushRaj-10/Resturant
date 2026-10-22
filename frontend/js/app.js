@@ -62,6 +62,18 @@ const elements = {
   modalActionsContainer: document.getElementById('modal-actions-container'),
   btnCloseModal: document.getElementById('btn-close-modal'),
   btnModalDone: document.getElementById('btn-modal-done'),
+
+  // AI Elements
+  aiDraftText: document.getElementById('ai-draft-text'),
+  btnDraftOrder: document.getElementById('btn-draft-order'),
+  aiDraftFeedback: document.getElementById('ai-draft-feedback'),
+  btnAiExplainBill: document.getElementById('btn-ai-explain-bill'),
+  btnAiSummary: document.getElementById('btn-ai-summary'),
+  btnAiSuggestions: document.getElementById('btn-ai-suggestions'),
+  aiInsightsPanel: document.getElementById('ai-insights-panel'),
+  aiInsightsTitle: document.getElementById('ai-insights-title'),
+  aiInsightsBadge: document.getElementById('ai-insights-badge'),
+  aiInsightsBody: document.getElementById('ai-insights-body'),
 };
 
 // ==========================================
@@ -160,6 +172,20 @@ function bindEventListeners() {
 
   // Bill Adjustment Form
   elements.billAdjustForm.addEventListener('submit', handleApplyBillAdjustment);
+
+  // AI Actions
+  if (elements.btnDraftOrder) {
+    elements.btnDraftOrder.addEventListener('click', handleDraftOrder);
+  }
+  if (elements.btnAiExplainBill) {
+    elements.btnAiExplainBill.addEventListener('click', handleExplainBill);
+  }
+  if (elements.btnAiSummary) {
+    elements.btnAiSummary.addEventListener('click', handleSummarize);
+  }
+  if (elements.btnAiSuggestions) {
+    elements.btnAiSuggestions.addEventListener('click', handleSuggestions);
+  }
 }
 
 // ==========================================
@@ -319,10 +345,25 @@ async function handleCreateOrder(e) {
 
     showToast(`Order #${newOrder.id} placed successfully!`, 'success');
 
-    // Reset form
+    // Show AI confirmation message
+    try {
+      const conf = await api.getOrderConfirmation(newOrder.id);
+      if (conf && conf.message) {
+        showToast(conf.message, 'info', 8000);
+      }
+    } catch (confErr) {
+      console.warn('Could not fetch confirmation message:', confErr);
+    }
+
+    // Reset form and draft feedback
     elements.orderForm.reset();
     elements.orderItemsList.innerHTML = '';
     addLineItemRow();
+    if (elements.aiDraftText) elements.aiDraftText.value = '';
+    if (elements.aiDraftFeedback) {
+      elements.aiDraftFeedback.innerHTML = '';
+      elements.aiDraftFeedback.className = 'ai-draft-feedback hidden';
+    }
 
     // Refresh orders list
     await fetchOrders();
@@ -454,6 +495,10 @@ export async function openOrderDetail(orderId) {
 
 function closeDetailModal() {
   elements.detailModal.classList.add('hidden');
+  if (elements.aiInsightsPanel) {
+    elements.aiInsightsPanel.classList.add('hidden');
+    elements.aiInsightsBody.innerHTML = '';
+  }
   setCurrentOrder(null, []);
 }
 
@@ -732,6 +777,204 @@ async function handleApplyBillAdjustment(e) {
     await fetchOrders();
   } catch (err) {
     showToast(err.detail || err.message || 'Failed to apply bill adjustment.', 'error');
+  }
+}
+
+// ==========================================
+// AI Feature Handlers (Step 8)
+// ==========================================
+
+async function handleDraftOrder() {
+  const text = elements.aiDraftText.value.trim();
+  if (!text) {
+    showToast('Please enter an order description to generate a draft.', 'warning');
+    return;
+  }
+
+  elements.btnDraftOrder.disabled = true;
+  const originalText = elements.btnDraftOrder.textContent;
+  elements.btnDraftOrder.textContent = 'Generating...';
+
+  try {
+    const res = await api.draftOrderFromText(text);
+
+    // Render notice banner and feedback safely with textContent
+    elements.aiDraftFeedback.innerHTML = '';
+    elements.aiDraftFeedback.className = 'ai-draft-feedback banner';
+
+    const heading = createEl('div', { className: 'feedback-heading' });
+    const icon = createEl('span', { textContent: '⚡ ' });
+    const headingText = createEl('span', {
+      textContent: 'AI draft generated. Please review before placing the order.'
+    });
+    heading.appendChild(icon);
+    heading.appendChild(headingText);
+
+    const badge = createEl('span', {
+      className: `badge ${res.source === 'llm' ? 'badge-source-llm' : 'badge-source-fallback'}`,
+      textContent: res.source === 'llm' ? 'AI' : 'Template',
+    });
+    heading.appendChild(badge);
+    elements.aiDraftFeedback.appendChild(heading);
+
+    if (res.warnings && res.warnings.length > 0) {
+      const warnList = createEl('ul');
+      for (const w of res.warnings) {
+        const li = createEl('li', { textContent: `⚠️ ${w}` });
+        warnList.appendChild(li);
+      }
+      elements.aiDraftFeedback.appendChild(warnList);
+    }
+
+    if (res.unmatched && res.unmatched.length > 0) {
+      const unList = createEl('ul');
+      for (const u of res.unmatched) {
+        const li = createEl('li', { textContent: `❓ Unmatched item: "${u}"` });
+        unList.appendChild(li);
+      }
+      elements.aiDraftFeedback.appendChild(unList);
+    }
+
+    elements.aiDraftFeedback.classList.remove('hidden');
+
+    // Pre-fill fields if draft exists (NEVER auto-submit)
+    if (res.draft) {
+      if (res.draft.customer_name) {
+        elements.customerNameInput.value = res.draft.customer_name;
+      }
+      if (res.draft.table_no) {
+        elements.tableNoInput.value = res.draft.table_no.toString();
+      }
+      if (res.draft.items && res.draft.items.length > 0) {
+        elements.orderItemsList.innerHTML = '';
+        for (const item of res.draft.items) {
+          addLineItemRow(item.menu_item_id, item.quantity);
+        }
+      }
+      updateFormTotal();
+    }
+  } catch (err) {
+    if (err.status === 429) {
+      showToast(err.detail || 'Rate limit exceeded. Please wait a minute before requesting AI again.', 'error');
+    } else {
+      showToast(err.detail || err.message || 'Failed to generate draft order.', 'error');
+    }
+  } finally {
+    elements.btnDraftOrder.disabled = false;
+    elements.btnDraftOrder.textContent = originalText;
+  }
+}
+
+function renderAiPanel(title, source, contentElementOrText) {
+  elements.aiInsightsPanel.classList.remove('hidden');
+  elements.aiInsightsTitle.textContent = title;
+  elements.aiInsightsBadge.textContent = source === 'llm' ? 'AI' : 'Template';
+  elements.aiInsightsBadge.className = `badge ${source === 'llm' ? 'badge-source-llm' : 'badge-source-fallback'}`;
+  elements.aiInsightsBody.innerHTML = '';
+
+  if (typeof contentElementOrText === 'string') {
+    const p = createEl('p', { textContent: contentElementOrText });
+    elements.aiInsightsBody.appendChild(p);
+  } else if (contentElementOrText instanceof HTMLElement) {
+    elements.aiInsightsBody.appendChild(contentElementOrText);
+  }
+}
+
+async function handleExplainBill() {
+  if (!state.currentOrder) return;
+  const btn = elements.btnAiExplainBill;
+  btn.disabled = true;
+  const orig = btn.textContent;
+  btn.textContent = 'Explaining...';
+
+  try {
+    const res = await api.getBillExplanation(state.currentOrder.id);
+    renderAiPanel('Bill Explanation', res.source, res.message);
+  } catch (err) {
+    if (err.status === 429) {
+      showToast(err.detail || 'Rate limit reached. Please wait before retrying.', 'error');
+    } else {
+      showToast(err.detail || err.message || 'Failed to generate bill explanation.', 'error');
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = orig;
+  }
+}
+
+async function handleSummarize() {
+  if (!state.currentOrder) return;
+  const btn = elements.btnAiSummary;
+  btn.disabled = true;
+  const orig = btn.textContent;
+  btn.textContent = 'Summarizing...';
+
+  try {
+    const res = await api.getOrderSummary(state.currentOrder.id);
+    renderAiPanel('Order Summary', res.source, res.message);
+  } catch (err) {
+    if (err.status === 429) {
+      showToast(err.detail || 'Rate limit reached. Please wait before retrying.', 'error');
+    } else {
+      showToast(err.detail || err.message || 'Failed to generate summary.', 'error');
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = orig;
+  }
+}
+
+async function handleSuggestions() {
+  if (!state.currentOrder) return;
+  const btn = elements.btnAiSuggestions;
+  btn.disabled = true;
+  const orig = btn.textContent;
+  btn.textContent = 'Suggesting...';
+
+  try {
+    const res = await api.getUpsellSuggestions(state.currentOrder.id);
+    const container = createEl('div');
+
+    if (!res.suggestions || res.suggestions.length === 0) {
+      const p = createEl('p', { textContent: 'No additional suggestions available for this order.' });
+      container.appendChild(p);
+    } else {
+      const grid = createEl('div', { className: 'upsell-grid' });
+      for (const s of res.suggestions) {
+        const itemInfo = state.menu.find((m) => m.id === s.menu_item_id);
+        const card = createEl('div', { className: 'upsell-card' });
+
+        const nameEl = createEl('div', {
+          className: 'upsell-card-name',
+          textContent: itemInfo ? itemInfo.name : `Menu Item #${s.menu_item_id}`,
+        });
+        const priceEl = createEl('div', {
+          className: 'upsell-card-price',
+          textContent: itemInfo ? formatCurrency(itemInfo.price) : '',
+        });
+        const reasonEl = createEl('div', {
+          className: 'upsell-card-reason',
+          textContent: s.reason,
+        });
+
+        card.appendChild(nameEl);
+        if (itemInfo) card.appendChild(priceEl);
+        card.appendChild(reasonEl);
+        grid.appendChild(card);
+      }
+      container.appendChild(grid);
+    }
+
+    renderAiPanel('Recommended Add-ons', res.source, container);
+  } catch (err) {
+    if (err.status === 429) {
+      showToast(err.detail || 'Rate limit reached. Please wait before retrying.', 'error');
+    } else {
+      showToast(err.detail || err.message || 'Failed to fetch suggestions.', 'error');
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = orig;
   }
 }
 
