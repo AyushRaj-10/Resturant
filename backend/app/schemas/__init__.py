@@ -9,6 +9,7 @@ from app.schemas.common import (
 )
 from app.schemas.menu import MenuItemBase, MenuItemCreate, MenuItemOut
 from app.schemas.order import (
+    AllowedActionsResponse,
     BillUpdate,
     OrderCreate,
     OrderItemIn,
@@ -38,6 +39,7 @@ __all__ = [
     "QuantityUpdate",
     "BillUpdate",
     "StatusUpdate",
+    "AllowedActionsResponse",
     # Audit
     "AgentAuditLogOut",
 ]
